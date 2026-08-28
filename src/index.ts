@@ -7,12 +7,26 @@ import rateLimit from 'express-rate-limit';
 import { ZodError } from 'zod';
 import authRoutes from './routes/auth.js';
 import syncRoutes from './routes/sync.js';
-import { PORT } from './lib/config.js';
+import { CORS_ORIGINS, PORT } from './lib/config.js';
 
 const app = express();
 
+// Trust Render's proxy so express-rate-limit sees the real client IP.
+app.set('trust proxy', 1);
+
 app.use(helmet());
-app.use(cors());
+app.use(
+  cors({
+    origin:
+      CORS_ORIGINS === '*'
+        ? true
+        : (origin, cb) => {
+            // Allow requests with no Origin header (native apps, curl, tests).
+            if (!origin || CORS_ORIGINS.includes(origin)) cb(null, true);
+            else cb(null, false);
+          },
+  }),
+);
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('dev'));
 
@@ -23,8 +37,15 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const syncLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 2000,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use('/auth', authLimiter, authRoutes);
-app.use('/sync', syncRoutes);
+app.use('/sync', syncLimiter, syncRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });

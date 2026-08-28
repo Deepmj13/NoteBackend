@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { pool } from '../db/pool.js';
 import { signToken } from '../lib/jwt.js';
+import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 
 const router = Router();
@@ -16,7 +17,7 @@ function publicUser(row: { id: string; email: string }) {
   return { id: row.id, email: row.email };
 }
 
-router.post('/register', async (req, res) => {
+router.post('/register', asyncHandler(async (req, res) => {
   const parsed = credentialsSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' });
@@ -47,9 +48,9 @@ router.post('/register', async (req, res) => {
     }
     throw err;
   }
-});
+}));
 
-router.post('/login', async (req, res) => {
+router.post('/login', asyncHandler(async (req, res) => {
   const parsed = credentialsSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid email or password' });
@@ -76,9 +77,9 @@ router.post('/login', async (req, res) => {
 
   const token = signToken({ sub: user.id, email: user.email });
   res.json({ token, user: publicUser(user) });
-});
+}));
 
-router.get('/me', requireAuth, async (req, res) => {
+router.get('/me', requireAuth, asyncHandler(async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const { rows } = await pool.query(
     'select id, email from users where id = $1',
@@ -90,6 +91,6 @@ router.get('/me', requireAuth, async (req, res) => {
     return;
   }
   res.json({ user: publicUser(user) });
-});
+}));
 
 export default router;
